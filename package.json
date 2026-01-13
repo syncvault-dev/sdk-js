@@ -1,0 +1,49 @@
+{
+  "name": "@syncvault/sdk",
+  "version": "1.0.0",
+  "description": "SyncVault SDK - Zero-knowledge encrypted sync for Node.js and browsers",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "types": "./src/index.d.ts"
+    },
+    "./crypto": {
+      "import": "./src/crypto.js"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node test/test.js"
+  },
+  "keywords": [
+    "syncvault",
+    "sync",
+    "encryption",
+    "e2e",
+    "end-to-end-encryption",
+    "zero-knowledge",
+    "aes-256",
+    "pbkdf2",
+    "cloud-sync",
+    "secure-storage"
+  ],
+  "author": "SyncVault <support@syncvault.dev>",
+  "license": "MIT",
+  "homepage": "https://syncvault.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/syncvault/sdk-js"
+  },
+  "bugs": {
+    "url": "https://github.com/syncvault/sdk-js/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "sideEffects": false
+}

@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Source control
+.git/
+.gitignore
+.github/
+
+# Testing
+test/
+*.test.js
+*.spec.js
+
+# Development
+.env
+.env.local
+.DS_Store
+*.swp
+*.swo
+
+# Build artifacts (not needed, using src directly)
+.rolluprc.js
+
+# Documentation
+NPM_PUBLISHING.md
+README.dev.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml

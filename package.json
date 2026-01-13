@@ -37,10 +37,10 @@
   "homepage": "https://syncvault.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/syncvault/sdk-js"
+    "url": "https://github.com/syncvault-dev/sdk-js"
   },
   "bugs": {
-    "url": "https://github.com/syncvault/sdk-js/issues"
+    "url": "https://github.com/syncvault-dev/sdk-js/issues"
   },
   "engines": {
     "node": ">=18.0.0"

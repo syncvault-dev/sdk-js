@@ -210,3 +210,81 @@ await fetch(`https://api.syncvault.dev/api/entitlements/${userId}`, {
 ```
 
 Never expose the secret token in client-side code.
+
+## Offline Sync
+
+The SDK supports offline-first sync with local caching and automatic retry.
+
+### Basic Usage
+
+```javascript
+import { SyncVault, createOfflineClient } from '@syncvault/sdk';
+
+const baseClient = new SyncVault({ appToken: 'your_token' });
+const vault = createOfflineClient(baseClient, {
+  retryInterval: 30000,  // Retry every 30 seconds
+  maxRetries: 10,        // Max retries per operation
+  autoSync: true         // Auto-sync when online
+});
+
+// Initialize (loads cache from storage)
+await vault.init();
+
+// Authenticate
+await vault.auth('username', 'password');
+
+// Put - queues if offline, syncs when online
+await vault.put('data.json', { hello: 'world' });
+
+// Get - returns cached data if offline
+const data = await vault.get('data.json');
+
+// Check pending operations
+if (vault.hasPendingChanges()) {
+  console.log('Pending:', vault.pendingCount());
+}
+```
+
+### Callbacks
+
+```javascript
+vault.onSyncSuccess = (op) => {
+  console.log('Synced:', op.path);
+};
+
+vault.onSyncError = (op, error) => {
+  console.log('Failed:', op.path, error);
+};
+```
+
+### Manual Sync Control
+
+```javascript
+// Manually trigger sync
+await vault.syncPending();
+
+// Stop auto-sync
+vault.stopAutoSync();
+
+// Clear cache/queue
+await vault.getStore().clearCache();
+await vault.getStore().clearQueue();
+```
+
+### Custom Storage (React Native, etc.)
+
+```javascript
+const customStorage = {
+  async get(key) {
+    return AsyncStorage.getItem(key).then(JSON.parse);
+  },
+  async set(key, value) {
+    await AsyncStorage.setItem(key, JSON.stringify(value));
+  },
+  async remove(key) {
+    await AsyncStorage.removeItem(key);
+  }
+};
+
+const vault = createOfflineClient(baseClient, { storage: customStorage });
+```

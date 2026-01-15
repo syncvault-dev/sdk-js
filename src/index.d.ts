@@ -72,3 +72,90 @@ export declare class SyncVault {
 
 export declare function encrypt(data: unknown, password: string): Promise<string>;
 export declare function decrypt<T = unknown>(encryptedBase64: string, password: string): Promise<T>;
+
+// Offline sync types
+export interface PendingOperation {
+  id: string;
+  type: 'put' | 'delete';
+  path: string;
+  data?: string;
+  createdAt: number;
+  retries: number;
+}
+
+export interface CacheEntry {
+  path: string;
+  data: string;
+  updatedAt: number;
+}
+
+export interface OfflineStorage {
+  get(key: string): Promise<unknown | null>;
+  set(key: string, value: unknown): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
+export interface OfflineOptions {
+  storage?: OfflineStorage;
+  retryInterval?: number;
+  maxRetries?: number;
+  autoSync?: boolean;
+}
+
+export declare class OfflineStore {
+  constructor(storage?: OfflineStorage | null);
+  load(): Promise<void>;
+  persist(): Promise<void>;
+  getCached(path: string): CacheEntry | null;
+  setCache(path: string, data: string): Promise<void>;
+  removeCache(path: string): Promise<void>;
+  queueOperation(op: Partial<PendingOperation>): Promise<void>;
+  getPendingOperations(): PendingOperation[];
+  removeOperation(id: string): Promise<void>;
+  incrementRetry(id: string): Promise<void>;
+  hasPendingOperations(): boolean;
+  clearQueue(): Promise<void>;
+  clearCache(): Promise<void>;
+}
+
+export declare class OfflineSyncVault {
+  constructor(baseClient: SyncVault, options?: OfflineOptions);
+  
+  onSyncSuccess: ((op: PendingOperation) => void) | null;
+  onSyncError: ((op: PendingOperation, error: Error) => void) | null;
+  
+  init(): Promise<void>;
+  
+  // Auth (proxied to base client)
+  auth(username: string, password: string): Promise<User>;
+  register(username: string, password: string): Promise<User>;
+  setAuth(token: string, password: string): void;
+  getAuthUrl(state?: string): string;
+  exchangeCode(code: string, password: string): Promise<User>;
+  isAuthenticated(): boolean;
+  logout(): void;
+  
+  // Data operations with offline support
+  put<T = unknown>(path: string, data: T): Promise<PutResponse | { queued: boolean; path: string }>;
+  get<T = unknown>(path: string): Promise<T>;
+  delete(path: string): Promise<DeleteResponse | { queued: boolean; path: string }>;
+  list(): Promise<FileInfo[]>;
+  
+  // Metadata/entitlements (no offline caching)
+  getMetadata<T extends Metadata = Metadata>(): Promise<T>;
+  setMetadata<T extends Metadata = Metadata>(metadata: T): Promise<T>;
+  updateMetadata<T extends Metadata = Metadata>(metadata: Partial<T>): Promise<T>;
+  getEntitlements<T extends Entitlements = Entitlements>(): Promise<T>;
+  getQuota(): Promise<QuotaInfo>;
+  getUser(): Promise<User>;
+  
+  // Sync control
+  startAutoSync(): void;
+  stopAutoSync(): void;
+  syncPending(): Promise<void>;
+  hasPendingChanges(): boolean;
+  pendingCount(): number;
+  getStore(): OfflineStore;
+}
+
+export declare function createOfflineClient(baseClient: SyncVault, options?: OfflineOptions): OfflineSyncVault;

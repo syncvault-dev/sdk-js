@@ -280,3 +280,4 @@ export class SyncVault {
 }
 
 export { encrypt, decrypt } from './crypto.js';
+export { OfflineSyncVault, OfflineStore, createOfflineClient } from './offline.js';

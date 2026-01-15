@@ -2,6 +2,15 @@ import { encrypt, decrypt, prepareAuthPassword } from './crypto.js';
 
 const DEFAULT_SERVER = 'https://api.syncvault.dev';
 
+export class SyncVaultError extends Error {
+  constructor(message, statusCode, data) {
+    super(message);
+    this.name = 'SyncVaultError';
+    this.statusCode = statusCode;
+    this.data = data;
+  }
+}
+
 export class SyncVault {
   constructor(options = {}) {
     if (!options.appToken) {
@@ -187,6 +196,26 @@ export class SyncVault {
   }
 
   /**
+   * Get entitlements for current user (read-only, set by developer's backend)
+   * Entitlements are used for subscription status, feature flags, etc.
+   */
+  async getEntitlements() {
+    this._checkAuth();
+
+    const response = await this._request('/api/sync/entitlements');
+    return response.entitlements;
+  }
+
+  /**
+   * Get user storage quota info for the current app
+   */
+  async getQuota() {
+    this._checkAuth();
+
+    return this._request('/api/sync/quota');
+  }
+
+  /**
    * Check if user is authenticated
    */
   isAuthenticated() {
@@ -239,7 +268,11 @@ export class SyncVault {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'Request failed');
+      throw new SyncVaultError(
+        data.error || 'Request failed',
+        response.status,
+        data
+      );
     }
 
     return data;

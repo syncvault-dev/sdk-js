@@ -27,6 +27,14 @@ export interface DeleteResponse {
 
 export type Metadata = Record<string, unknown>;
 
+export type Entitlements = Record<string, unknown>;
+
+export interface QuotaInfo {
+  quotaBytes: number | null;
+  usedBytes: number;
+  unlimited: boolean;
+}
+
 export declare class SyncVault {
   constructor(options: SyncVaultOptions);
   
@@ -45,10 +53,16 @@ export declare class SyncVault {
   list(): Promise<FileInfo[]>;
   delete(path: string): Promise<DeleteResponse>;
   
-  // Metadata operations (unencrypted server-side data)
+  // Metadata operations (unencrypted, for app preferences like theme, timezone)
   getMetadata<T extends Metadata = Metadata>(): Promise<T>;
   setMetadata<T extends Metadata = Metadata>(metadata: T): Promise<T>;
   updateMetadata<T extends Metadata = Metadata>(metadata: Partial<T>): Promise<T>;
+  
+  // Entitlements (read-only, set by developer's backend for subscriptions, feature flags)
+  getEntitlements<T extends Entitlements = Entitlements>(): Promise<T>;
+  
+  // Quota info
+  getQuota(): Promise<QuotaInfo>;
   
   // State
   isAuthenticated(): boolean;

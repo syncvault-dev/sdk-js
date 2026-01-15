@@ -105,33 +105,59 @@ List all files for this app.
 #### `vault.delete(path)`
 Delete a file.
 
-### Metadata Methods
+### Metadata Methods (Preferences)
 
-App metadata is unencrypted data stored server-side. Use it for app-specific logic like subscription status, feature flags, or user preferences that don't need encryption.
+Metadata is unencrypted data for app preferences like theme, timezone, language. Use it for settings that don't need encryption and are needed for app logic.
 
 #### `vault.getMetadata()`
-Get app metadata for the current user.
+Get preferences for the current user.
 
 #### `vault.setMetadata(metadata)`
-Set app metadata (replaces all existing metadata).
+Set preferences (replaces all existing).
 
 #### `vault.updateMetadata(metadata)`
-Update app metadata (merges with existing metadata).
+Update preferences (merges with existing).
 
 ```javascript
-// Example: Store subscription status
+// Example: Store user preferences
 await vault.setMetadata({
-  subscriptionActive: true,
-  subscriptionExpiresAt: '2026-12-31',
-  plan: 'premium'
+  theme: 'dark',
+  timezone: 'UTC',
+  language: 'en'
 });
 
-// Read metadata
-const meta = await vault.getMetadata();
-console.log(meta.subscriptionActive); // true
+// Read preferences
+const prefs = await vault.getMetadata();
+console.log(prefs.theme); // 'dark'
 
 // Update specific fields
-await vault.updateMetadata({ lastLogin: new Date().toISOString() });
+await vault.updateMetadata({ language: 'es' });
+```
+
+### Entitlements Methods
+
+Entitlements are read-only data set by the developer's backend. Use them for subscription status, feature flags, etc. Users can read but not modify entitlements.
+
+#### `vault.getEntitlements()`
+Get entitlements for the current user.
+
+```javascript
+// Read entitlements (set by developer backend)
+const entitlements = await vault.getEntitlements();
+console.log(entitlements.plan); // 'premium'
+console.log(entitlements.features); // ['advanced', 'export']
+```
+
+### Quota Methods
+
+#### `vault.getQuota()`
+Get user's storage quota information.
+
+```javascript
+const quota = await vault.getQuota();
+console.log(quota.quotaBytes);   // 10485760 (10MB) or null if unlimited
+console.log(quota.usedBytes);    // 1048576 (1MB)
+console.log(quota.unlimited);    // false
 ```
 
 ### State Methods
@@ -158,4 +184,29 @@ Users see these permissions during OAuth authorization.
 
 All data is encrypted client-side using AES-256-GCM with a key derived from the user's password using PBKDF2 (100,000 iterations). The server never sees unencrypted data.
 
-Note: Metadata is NOT encrypted - use it only for non-sensitive app logic.
+Note: Metadata (preferences) and entitlements are NOT encrypted - use them only for non-sensitive settings and subscription status.
+
+## Setting Entitlements (Developer Backend)
+
+Entitlements can only be set from your backend using both the app token and secret token:
+
+```javascript
+// On your backend (e.g., after payment webhook)
+await fetch(`https://api.syncvault.dev/api/entitlements/${userId}`, {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-App-Token': process.env.SYNCVAULT_APP_TOKEN,
+    'X-Secret-Token': process.env.SYNCVAULT_SECRET_TOKEN
+  },
+  body: JSON.stringify({
+    entitlements: {
+      plan: 'premium',
+      features: ['advanced', 'export'],
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  })
+});
+```
+
+Never expose the secret token in client-side code.

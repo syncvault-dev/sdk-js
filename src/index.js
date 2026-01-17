@@ -107,15 +107,24 @@ export class SyncVault {
 
   /**
    * Store encrypted data
+   * @param {string} path - File path
+   * @param {any} data - Data to encrypt and store
+   * @param {Object} options - Optional settings
+   * @param {number} options.updatedAt - Timestamp for LWW conflict resolution
    */
-  async put(path, data) {
+  async put(path, data, options = {}) {
     this._checkAuth();
 
     const encrypted = await encrypt(data, this.password);
+    const body = { path, data: encrypted };
+    
+    if (options.updatedAt) {
+      body.updatedAt = new Date(options.updatedAt).toISOString();
+    }
 
     const response = await this._request('/api/sync/put', {
       method: 'POST',
-      body: JSON.stringify({ path, data: encrypted })
+      body: JSON.stringify(body)
     });
 
     return response;
@@ -213,6 +222,63 @@ export class SyncVault {
     this._checkAuth();
 
     return this._request('/api/sync/quota');
+  }
+
+  // --- Shared Vaults ---
+
+  /**
+   * Get all shared vaults the user has access to in this app
+   */
+  async getSharedVaults() {
+    this._checkAuth();
+
+    return this._request('/api/sync/shared/vaults');
+  }
+
+  /**
+   * List files in a shared vault
+   */
+  async listShared(vaultId) {
+    this._checkAuth();
+
+    const response = await this._request(`/api/sync/shared/${vaultId}/list`);
+    return response.files;
+  }
+
+  /**
+   * Store encrypted data in a shared vault
+   */
+  async putShared(vaultId, path, data, sharedPassword) {
+    this._checkAuth();
+
+    const encrypted = await encrypt(data, sharedPassword || this.password);
+
+    return this._request(`/api/sync/shared/${vaultId}/put`, {
+      method: 'POST',
+      body: JSON.stringify({ path, data: encrypted })
+    });
+  }
+
+  /**
+   * Retrieve and decrypt data from a shared vault
+   */
+  async getShared(vaultId, path, sharedPassword) {
+    this._checkAuth();
+
+    const response = await this._request(`/api/sync/shared/${vaultId}/get?path=${encodeURIComponent(path)}`);
+    return decrypt(response.data, sharedPassword || this.password);
+  }
+
+  /**
+   * Delete a file from a shared vault
+   */
+  async deleteShared(vaultId, path) {
+    this._checkAuth();
+
+    return this._request(`/api/sync/shared/${vaultId}/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ path })
+    });
   }
 
   /**

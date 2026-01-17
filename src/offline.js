@@ -219,15 +219,16 @@ export class OfflineSyncVault {
   }
   
   /**
-   * Put with offline support
+   * Put with offline support (LWW enabled)
    */
   async put(path, data) {
     await this.init();
     
+    const timestamp = Date.now();
     const encrypted = await encrypt(data, this.client.password);
     
     try {
-      const result = await this.client.put(path, data);
+      const result = await this.client.put(path, data, { updatedAt: timestamp });
       await this.store.setCache(path, encrypted);
       return result;
     } catch (error) {
@@ -236,7 +237,8 @@ export class OfflineSyncVault {
         await this.store.queueOperation({
           type: 'put',
           path,
-          data: encrypted
+          data: encrypted,
+          updatedAt: timestamp
         });
         return { queued: true, path };
       }
@@ -391,10 +393,31 @@ export class OfflineSyncVault {
   }
   
   async _syncPut(op) {
-    await this.client._request('/api/sync/put', {
-      method: 'POST',
-      body: JSON.stringify({ path: op.path, data: op.data })
-    });
+    const body = { path: op.path, data: op.data };
+    if (op.updatedAt) {
+      body.updatedAt = new Date(op.updatedAt).toISOString();
+    }
+    
+    try {
+      await this.client._request('/api/sync/put', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+    } catch (error) {
+      // LWW conflict - server has newer data, discard local change
+      if (error.statusCode === 409 && error.data?.code === 'CONFLICT_STALE') {
+        // Fetch fresh data from server to update cache
+        try {
+          const result = await this.client.get(op.path);
+          const encrypted = await encrypt(result, this.client.password);
+          await this.store.setCache(op.path, encrypted);
+        } catch (cacheErr) {
+          console.warn('Failed to update cache after LWW conflict:', cacheErr.message);
+        }
+        return; // Consider this "synced" - we accepted server's version
+      }
+      throw error;
+    }
   }
   
   async _syncDelete(op) {

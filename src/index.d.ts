@@ -35,6 +35,20 @@ export interface QuotaInfo {
   unlimited: boolean;
 }
 
+export interface SharedVault {
+  id: string;
+  name: string;
+  ownerId: string;
+  ownerUsername: string;
+  memberCount: number;
+  isOwner: boolean;
+  createdAt: string;
+}
+
+export interface PutOptions {
+  updatedAt?: number | Date;
+}
+
 export declare class SyncVault {
   constructor(options: SyncVaultOptions);
   
@@ -48,7 +62,7 @@ export declare class SyncVault {
   register(username: string, password: string): Promise<User>;
   
   // Data operations
-  put<T = unknown>(path: string, data: T): Promise<PutResponse>;
+  put<T = unknown>(path: string, data: T, options?: PutOptions): Promise<PutResponse>;
   get<T = unknown>(path: string): Promise<T>;
   list(): Promise<FileInfo[]>;
   delete(path: string): Promise<DeleteResponse>;
@@ -63,6 +77,13 @@ export declare class SyncVault {
   
   // Quota info
   getQuota(): Promise<QuotaInfo>;
+  
+  // Shared vaults
+  getSharedVaults(): Promise<SharedVault[]>;
+  listShared(vaultId: string): Promise<FileInfo[]>;
+  putShared<T = unknown>(vaultId: string, path: string, data: T, sharedPassword?: string): Promise<PutResponse>;
+  getShared<T = unknown>(vaultId: string, path: string, sharedPassword?: string): Promise<T>;
+  deleteShared(vaultId: string, path: string): Promise<DeleteResponse>;
   
   // State
   isAuthenticated(): boolean;
@@ -79,6 +100,7 @@ export interface PendingOperation {
   type: 'put' | 'delete';
   path: string;
   data?: string;
+  updatedAt?: number;
   createdAt: number;
   retries: number;
 }

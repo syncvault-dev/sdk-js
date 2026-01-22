@@ -1,4 +1,6 @@
-import { encrypt, decrypt, prepareAuthPassword } from './crypto.js';
+import { encrypt, decrypt, prepareAuthPassword, decryptFromServer } from './crypto.js';
+
+export { encrypt, decrypt, decryptFromServer };
 
 const DEFAULT_SERVER = 'https://api.syncvault.dev';
 
@@ -345,5 +347,154 @@ export class SyncVault {
   }
 }
 
-export { encrypt, decrypt } from './crypto.js';
+/**
+ * Server-side client for app backends to write data on behalf of users.
+ * Requires server_write OAuth scope to be granted by users.
+ * 
+ * Data is encrypted with the user's public key (RSA-OAEP),
+ * so only the user can decrypt it with their private key.
+ */
+export class SyncVaultServer {
+  constructor(options = {}) {
+    if (!options.appToken) {
+      throw new Error('appToken is required');
+    }
+    if (!options.secretToken) {
+      throw new Error('secretToken is required for server-side operations');
+    }
+
+    this.appToken = options.appToken;
+    this.secretToken = options.secretToken;
+    this.serverUrl = options.serverUrl || DEFAULT_SERVER;
+  }
+
+  /**
+   * Get user's public key for encryption
+   */
+  async getUserPublicKey(userId) {
+    return this._request(`/api/server/user/${userId}/public-key`);
+  }
+
+  /**
+   * Encrypt data with user's public key (RSA-OAEP + AES-GCM hybrid)
+   */
+  async encryptForUser(data, publicKeyPem) {
+    // Parse PEM to get raw key bytes
+    const pemBody = publicKeyPem
+      .replace(/-----BEGIN PUBLIC KEY-----/, '')
+      .replace(/-----END PUBLIC KEY-----/, '')
+      .replace(/\s+/g, '');
+    const publicKeyBuffer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
+    
+    const publicKey = await crypto.subtle.importKey(
+      'spki',
+      publicKeyBuffer,
+      { name: 'RSA-OAEP', hash: 'SHA-256' },
+      false,
+      ['encrypt']
+    );
+
+    const encoder = new TextEncoder();
+    const dataBuffer = encoder.encode(JSON.stringify(data));
+    
+    // Generate random AES key
+    const aesKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt']
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedData = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      aesKey,
+      dataBuffer
+    );
+
+    // Web Crypto returns ciphertext with authTag appended
+    // We need to separate them for our format
+    const encryptedArray = new Uint8Array(encryptedData);
+    const authTag = encryptedArray.slice(-16);
+    const ciphertext = encryptedArray.slice(0, -16);
+
+    const rawAesKey = await crypto.subtle.exportKey('raw', aesKey);
+    const encryptedAesKey = await crypto.subtle.encrypt(
+      { name: 'RSA-OAEP' },
+      publicKey,
+      rawAesKey
+    );
+
+    // Pack: encryptedAesKey (256 bytes) + iv (12 bytes) + authTag (16 bytes) + ciphertext
+    const result = new Uint8Array(
+      encryptedAesKey.byteLength + iv.byteLength + authTag.byteLength + ciphertext.byteLength
+    );
+    let offset = 0;
+    result.set(new Uint8Array(encryptedAesKey), offset);
+    offset += encryptedAesKey.byteLength;
+    result.set(iv, offset);
+    offset += iv.byteLength;
+    result.set(authTag, offset);
+    offset += authTag.byteLength;
+    result.set(ciphertext, offset);
+
+    return btoa(String.fromCharCode(...result));
+  }
+
+  /**
+   * Write pre-encrypted data to user's storage
+   */
+  async putForUser(userId, path, encryptedData) {
+    return this._request(`/api/server/user/${userId}/put`, {
+      method: 'POST',
+      body: JSON.stringify({ path, data: encryptedData })
+    });
+  }
+
+  /**
+   * Encrypt and store data for user in one call
+   */
+  async writeForUser(userId, path, data) {
+    const { publicKey } = await this.getUserPublicKey(userId);
+    const encrypted = await this.encryptForUser(data, publicKey);
+    return this.putForUser(userId, path, encrypted);
+  }
+
+  /**
+   * List files in user's storage for this app
+   */
+  async listForUser(userId) {
+    return this._request(`/api/server/user/${userId}/list`);
+  }
+
+  async _request(path, options = {}) {
+    const url = `${this.serverUrl}${path}`;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-App-Token': this.appToken,
+      'X-Secret-Token': this.secretToken
+    };
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...headers,
+        ...options.headers
+      }
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      throw new SyncVaultError(
+        responseData.error || 'Request failed',
+        response.status,
+        responseData
+      );
+    }
+
+    return responseData;
+  }
+}
+
 export { OfflineSyncVault, OfflineStore, createOfflineClient } from './offline.js';
